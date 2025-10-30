@@ -7,7 +7,7 @@ resource "null_resource" "get_kube_config" {
     aws_eks_node_group.node_group
   ]
 
-  # Multi-line command using heredoc
+  # Create kubeconfig
   provisioner "local-exec" {
     command = <<-EOT
       aws eks update-kubeconfig \
@@ -17,10 +17,12 @@ resource "null_resource" "get_kube_config" {
     EOT
   }
 
-  # Single-line destroy command (heredoc or escaped quotes)
+  # Destroy: remove kubeconfig
   provisioner "local-exec" {
     when    = destroy
-    command = "rm -f \"${pathexpand(\"~/.kube/config\")}\""
+    command = <<-EOT
+      rm -f "${pathexpand("~/.kube/config")}"
+    EOT
   }
 }
 
