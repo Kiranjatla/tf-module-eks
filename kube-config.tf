@@ -1,7 +1,7 @@
 # ===================================================================
 # Generate kubeconfig after cluster is ready
 # ===================================================================
-resource "null_resource" "get_kube_config" {
+resource "null_resource" "get-kube-config" {
   depends_on = [
     aws_eks_cluster.eks,
     aws_eks_node_group.node_group
