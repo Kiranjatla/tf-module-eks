@@ -1,27 +1,31 @@
-resource "aws_ec2_tag" "private-subnets" {
+# Private Subnets – Cluster Tag
+resource "aws_ec2_tag" "private_subnet_cluster" {
   count       = length(var.PRIVATE_SUBNET_IDS)
-  resource_id = element(var.PRIVATE_SUBNET_IDS, count.index)
-  key         = "kubernetes.io/cluster/${var.ENV}-eks-cluster"
-  value       = "Owned"
+  resource_id = var.PRIVATE_SUBNET_IDS[count.index]
+  key         = "kubernetes.io/cluster/${local.cluster_name}"
+  value       = "owned"
 }
 
-resource "aws_ec2_tag" "private-subnets-lb" {
+# Private Subnets – Internal LB
+resource "aws_ec2_tag" "private_subnet_internal_lb" {
   count       = length(var.PRIVATE_SUBNET_IDS)
-  resource_id = element(var.PRIVATE_SUBNET_IDS, count.index)
+  resource_id = var.PRIVATE_SUBNET_IDS[count.index]
   key         = "kubernetes.io/role/internal-elb"
   value       = "1"
 }
 
-resource "aws_ec2_tag" "public-subnets" {
+# Public Subnets – Cluster Tag
+resource "aws_ec2_tag" "public_subnet_cluster" {
   count       = length(var.PUBLIC_SUBNET_IDS)
-  resource_id = element(var.PUBLIC_SUBNET_IDS, count.index)
-  key         = "kubernetes.io/cluster/${var.ENV}-eks-cluster"
-  value       = "Owned"
+  resource_id = var.PUBLIC_SUBNET_IDS[count.index]
+  key         = "kubernetes.io/cluster/${local.cluster_name}"
+  value       = "owned"
 }
 
-resource "aws_ec2_tag" "public-subnets-lb" {
+# Public Subnets – Public LB
+resource "aws_ec2_tag" "public_subnet_public_lb" {
   count       = length(var.PUBLIC_SUBNET_IDS)
-  resource_id = element(var.PUBLIC_SUBNET_IDS, count.index)
+  resource_id = var.PUBLIC_SUBNET_IDS[count.index]
   key         = "kubernetes.io/role/elb"
   value       = "1"
 }
