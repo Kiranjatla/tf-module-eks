@@ -9,13 +9,13 @@ resource "null_resource" "get_kube_config" {
       aws eks update-kubeconfig \
         --name ${local.cluster_name} \
         --region ${var.AWS_REGION} \
-        --kubeconfig ${pathexpand("~/.kube/config")}
+        --kubeconfig "${pathexpand("~/.kube/config")}"
     EOT
   }
 
   provisioner "local-exec" {
     when    = destroy
-    command = "rm -f ${pathexpand('~/.kube/config')}"
+    command = "rm -f \"${pathexpand(\"~/.kube/config\")}\""
   }
 }
 
