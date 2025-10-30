@@ -1,5 +1,5 @@
 # ===================================================================
-# Generate ~/.kube/config after cluster is ready
+# Generate kubeconfig after cluster is ready
 # ===================================================================
 resource "null_resource" "get_kube_config" {
   depends_on = [
@@ -7,7 +7,7 @@ resource "null_resource" "get_kube_config" {
     aws_eks_node_group.node_group
   ]
 
-  # Use heredoc for multi-line command
+  # Multi-line command using heredoc
   provisioner "local-exec" {
     command = <<-EOT
       aws eks update-kubeconfig \
@@ -17,7 +17,7 @@ resource "null_resource" "get_kube_config" {
     EOT
   }
 
-  # Clean up on destroy
+  # Single-line destroy command (heredoc or escaped quotes)
   provisioner "local-exec" {
     when    = destroy
     command = "rm -f \"${pathexpand(\"~/.kube/config\")}\""
@@ -35,9 +35,12 @@ provider "kubernetes" {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
     args        = [
-      "eks", "get-token",
-      "--cluster-name", aws_eks_cluster.eks.name,
-      "--region", var.AWS_REGION
+      "eks",
+      "get-token",
+      "--cluster-name",
+      aws_eks_cluster.eks.name,
+      "--region",
+      var.AWS_REGION
     ]
   }
 }
