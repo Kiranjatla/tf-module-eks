@@ -31,7 +31,7 @@ variable "CREATE_EXTERNAL_SECRETS" {
 }
 
 variable "INSTALL_KUBE_METRICS" {
-  default = true
+  default = false
 }
 
 variable "CREATE_SCP" {
