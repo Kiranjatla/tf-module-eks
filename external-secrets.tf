@@ -148,21 +148,21 @@ kubectl get --raw=/apis/external-secrets.io/v1 > /dev/null 2>&1 || true
 sleep 5
 
 echo "Waiting for external-secrets webhook pod to be ready..."
-timeout=180
+timeout=300
 elapsed=0
 interval=5
 
-until kubectl -n kube-system get pod -l app.kubernetes.io/name=external-secrets -o jsonpath='{range .items[*]}{.metadata.name}:{.status.phase}{"\n"}{end}' | grep -E 'webhook.*:Running'; do
+until kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do
   echo "Webhook pod not ready yet... sleeping $interval s"
   sleep $interval
   elapsed=$((elapsed + interval))
   if [ $elapsed -ge $timeout ]; then
     echo "Timed out waiting for webhook pod"
+    kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook
     exit 1
   fi
 done
-echo "Webhook pod is running!"
-
+echo "Webhook pod is ready!"
 
 echo "Applying ClusterSecretStore..."
 kubectl apply -f ${path.module}/extras/external-store.yml
