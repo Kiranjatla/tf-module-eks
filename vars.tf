@@ -1,5 +1,6 @@
 variable "ENV" {
-  type = string
+  description = "Environment name (prod, dev, etc.)"
+  type        = string
 }
 
 variable "PRIVATE_SUBNET_IDS" {
@@ -27,7 +28,9 @@ variable "CREATE_ALB_INGRESS" {
 }
 
 variable "CREATE_EXTERNAL_SECRETS" {
-  default = false
+  description = "Set to true to install External Secrets"
+  type        = bool
+  default     = true
 }
 
 variable "INSTALL_KUBE_METRICS" {
