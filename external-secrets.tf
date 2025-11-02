@@ -142,11 +142,14 @@ timeout 180 kubectl -n kube-system wait --for=condition=available deploy/externa
   exit 1
 }
 
-echo "Waiting 60s for CRDs to register..."
-sleep 60
+echo "Waiting for CRD to be Established..."
+until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
+  echo "CRD not ready yet... sleeping 10s"
+  sleep 10
+done
 
-echo "Applying ClusterSecretStore..."
-kubectl apply -f ${path.module}/extras/external-store.yml || true
+echo "CRD is Established! Applying ClusterSecretStore..."
+kubectl apply -f ${path.module}/extras/external-store.yml
 
 echo "External Secrets deployed successfully!"
 EOF
