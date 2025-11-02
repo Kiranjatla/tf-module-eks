@@ -148,7 +148,11 @@ until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.sta
   sleep 10
 done
 
-echo "CRD is Established! Applying ClusterSecretStore..."
+echo "CRD is Established! Forcing kubectl API refresh..."
+kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
+sleep 5
+
+echo "Applying ClusterSecretStore..."
 kubectl apply -f ${path.module}/extras/external-store.yml
 
 echo "External Secrets deployed successfully!"
