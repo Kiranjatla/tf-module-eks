@@ -118,35 +118,45 @@ resource "null_resource" "external-secrets-ingress-chart" {
 
   provisioner "local-exec" {
     command = <<EOF
+# 1. Add Helm repo
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
-# Install WITHOUT --wait
-echo "Installing External Secrets (no --wait)..."
+# 2. Install latest Helm chart (v0.20.4)
+echo "Installing External Secrets (latest v0.20.4)..."
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
   --set serviceAccount.create=false \
   --set serviceAccount.name=external-secrets-controller \
+  --set installCRDs=true \
+  --version 0.20.4 \
   --timeout 5m
 
-# Wait for Deployment to exist
+# 3. Wait for Deployment
 echo "Waiting for Deployment..."
 until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
 
-# Wait for pod to be ready (4 min max) - allows IRSA to propagate
-echo "Waiting up to 4 min for pod to be ready..."
-if ! timeout 240 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=240s; then
-  echo "Pod failed. Restarting..."
+# 4. Wait for pod to be ready (5 min max)
+echo "Waiting up to 5 min for pod..."
+timeout 300 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=300s || {
+  echo "Pod failed. Debugging logs..."
+  kubectl -n kube-system get pods -l app.kubernetes.io/name=external-secrets
+  kubectl -n kube-system logs -l app.kubernetes.io/name=external-secrets --tail=20 || true
+  echo "Attempting restart..."
   kubectl -n kube-system rollout restart deploy external-secrets
-  timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s || exit 1
-fi
+  sleep 30
+  if ! timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s; then
+    echo "Second attempt failed. Check IRSA role trust."
+    exit 1
+  fi
+}
 
-# Wait 30s for CRDs
+# 5. Wait 30s for CRDs
 echo "Waiting 30s for CRDs..."
 sleep 30
 
-# Apply ClusterSecretStore
+# 6. Apply ClusterSecretStore
 kubectl apply -f ${path.module}/extras/external-store.yml || true
 
 echo "External Secrets deployed successfully!"
