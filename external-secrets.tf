@@ -118,6 +118,7 @@ resource "null_resource" "external-secrets-ingress-chart" {
 
   provisioner "local-exec" {
     command = <<EOF
+# Add Helm repo
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
@@ -129,10 +130,10 @@ helm upgrade -i external-secrets external-secrets/external-secrets \
   --set serviceAccount.name=external-secrets-controller \
   --set installCRDs=true \
   --version 0.20.4 \
-  --timeout 5m
+  --timeout 10m
+
 echo "Waiting for Deployment to be available..."
-until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
-kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s
+kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=300s
 
 # Wait for all required CRDs
 for crd in externalsecrets.external-secrets.io secretstores.external-secrets.io clustersecretstores.external-secrets.io; do
@@ -142,28 +143,27 @@ for crd in externalsecrets.external-secrets.io secretstores.external-secrets.io 
     sleep 5
   done
 done
+echo "All CRDs are established!"
 
-echo "All CRDs are established! Refreshing Kubernetes API..."
-kubectl get --raw=/apis/external-secrets.io/v1 > /dev/null 2>&1 || true
-sleep 5
+# Wait for webhook pod to be ready
+echo "Waiting for External Secrets webhook pod to be ready..."
+timeout=300
+elapsed=0
+interval=5
 
-#echo "Waiting for external-secrets webhook pod to be ready..."
-#timeout=300
-#elapsed=0
-#interval=5
-#
-#until kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do
-#  echo "Webhook pod not ready yet... sleeping $interval s"
-#  sleep $interval
-#  elapsed=$((elapsed + interval))
-#  if [ $elapsed -ge $timeout ]; then
-#    echo "Timed out waiting for webhook pod"
-#    kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook
-#    exit 1
-#  fi
-#done
-#echo "Webhook pod is ready!"
+until kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do
+  echo "Webhook pod not ready yet... sleeping $interval s"
+  sleep $interval
+  elapsed=$((elapsed + interval))
+  if [ $elapsed -ge $timeout ]; then
+    echo "Timed out waiting for webhook pod"
+    kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook
+    exit 1
+  fi
+done
+echo "Webhook pod is ready!"
 
+# Apply ClusterSecretStore
 echo "Applying ClusterSecretStore..."
 kubectl apply -f ${path.module}/extras/external-store.yml
 
@@ -180,6 +180,7 @@ kubectl delete -f ${path.module}/extras/external-store.yml || true
 EOF
   }
 }
+
 #echo "Waiting for Deployment..."
 #until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
 #
