@@ -146,14 +146,21 @@ resource "null_resource" "external-secrets-ingress-chart" {
 
   provisioner "local-exec" {
     command = <<EOF
-# 1. Install CRDs from CORRECT URL
-echo "Installing External Secrets CRDs..."
-kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-secrets/main/deploy/crds.yaml || true
+# 1. Install CRDs from WORKING RELEASE URL (v0.10.4)
+echo "Installing External Secrets CRDs (v0.10.4)..."
+kubectl apply -f https://github.com/external-secrets/external-secrets/releases/download/v0.10.4/external-secrets-crds.yaml || true
 
-# 2. Wait for CRD to be ready
+# 2. Wait for CRD (3-minute timeout to prevent hang)
 echo "Waiting for ClusterSecretStore CRD..."
+TIMEOUT=180
+START_TIME=$(date +%s)
 until kubectl get crd clustersecretstores.external-secrets.io > /dev/null 2>&1; do
-  echo "Still waiting... (5s)"
+  ELAPSED=$(( $(date +%s) - START_TIME ))
+  if [ $ELAPSED -gt $TIMEOUT ]; then
+    echo "ERROR: CRD not ready after 3m - failing build"
+    exit 1
+  fi
+  echo "Still waiting... ($ELAPSED s)"
   sleep 5
 done
 echo "CRD is ready!"
@@ -162,7 +169,7 @@ echo "CRD is ready!"
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
-# 4. Install Helm chart (NO --crds)
+# 4. Install Helm chart
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
