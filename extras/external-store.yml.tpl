@@ -1,4 +1,4 @@
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1alpha1
 kind: ClusterSecretStore
 metadata:
   name: roboshop-secret-manager
@@ -10,7 +10,7 @@ spec:
       role: ${ROLE_ARN}
 
 ---
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1alpha1
 kind: ClusterSecretStore
 metadata:
   name: roboshop-parameter-store
