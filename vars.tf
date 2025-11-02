@@ -47,7 +47,7 @@ variable "CREATE_PARAMETER_STORE" {
 }
 
 variable "versionx" {
-  default = "1.31"
+  default = "1.32"
 }
 
 variable "AWS_REGION" {
