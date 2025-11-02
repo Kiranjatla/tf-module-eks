@@ -124,7 +124,7 @@ resource "kubernetes_service_account" "external-ingress-ingress-sa" {
   automount_service_account_token = true
 }
 
-# === Template: external-store.yml.tpl ===
+# === Template: external-store.yml.tpl.tpl ===
 resource "local_file" "external_store_rendered" {
   count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   filename = "${path.module}/extras/external-store.yml"
@@ -204,7 +204,7 @@ EOF
 #helm repo update
 #helm upgrade -i external-secrets external-secrets/external-secrets -n kube-system --set serviceAccount.create=false --set serviceAccount.name=external-secrets-controller
 #sleep 30
-#kubectl apply -f ${path.module}/extras/external-store.yml
+#kubectl apply -f ${path.module}/extras/external-store.yml.tpl
 #EOF
 #  }
 #}
