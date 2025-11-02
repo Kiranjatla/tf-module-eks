@@ -1,9 +1,8 @@
 resource "aws_iam_policy" "external-secrets-secret-manager-serviceaccount-policy" {
-  count       = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  name        = "ExternalSecretsPolicy-sm-${var.ENV}-eks-cluster"
-  path        = "/"
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  name = "ExternalSecretsPolicy-sm-${var.ENV}-eks-cluster"
+  path = "/"
   description = "ExternalSecretsPolicy-sm-${var.ENV}-eks-cluster"
-
   policy = jsonencode({
     "Version": "2012-10-17",
     "Statement": [
@@ -22,11 +21,10 @@ resource "aws_iam_policy" "external-secrets-secret-manager-serviceaccount-policy
 }
 
 resource "aws_iam_policy" "external-secrets-parameter-store-serviceaccount-policy" {
-  count       = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  name        = "ExternalSecretsPolicy-pm-${var.ENV}-eks-cluster"
-  path        = "/"
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  name = "ExternalSecretsPolicy-pm-${var.ENV}-eks-cluster"
+  path = "/"
   description = "ExternalSecretsPolicy-pm-${var.ENV}-eks-cluster"
-
   policy = jsonencode({
     "Version": "2012-10-17",
     "Statement": [
@@ -44,70 +42,44 @@ resource "aws_iam_policy" "external-secrets-parameter-store-serviceaccount-polic
     ]
   })
 }
-# === OIDC Trust Policy ===
+
 data "aws_iam_policy_document" "external-secrets-policy_document" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
-
     condition {
-      test     = "StringEquals"
-      variable = "${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}:aud"
-      values   = ["sts.amazonaws.com"]
+      test = "StringEquals"
+      variable = "${replace(
+        aws_eks_cluster.eks.identity[0].oidc[0].issuer,
+        "https://",
+        "",
+      )}:aud"
+      values = ["sts.amazonaws.com"]
     }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}:sub"
-      values   = ["system:serviceaccount:kube-system:external-secrets-controller"]
-    }
-
     principals {
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(aws_eks_cluster.eks.identity[0].oidc[0].issuer, "https://", "")}"]
-      type        = "Federated"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(
+        aws_eks_cluster.eks.identity[0].oidc[0].issuer,
+        "https://",
+        "",
+      )}"]
+      type = "Federated"
     }
   }
 }
 
-
-#data "aws_iam_policy_document" "external-secrets-policy_document" {
-#  statement {
-#    actions = ["sts:AssumeRoleWithWebIdentity"]
-#
-#    condition {
-#      test = "StringEquals"
-#      variable = "${replace(
-#        aws_eks_cluster.eks.identity[0].oidc[0].issuer,
-#        "https://",
-#        "",
-#      )}:aud"
-#      values = ["sts.amazonaws.com"]
-#    }
-#
-#    principals {
-#      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(
-#        aws_eks_cluster.eks.identity[0].oidc[0].issuer,
-#        "https://",
-#        "",
-#      )}"]
-#      type = "Federated"
-#    }
-#  }
-#}
-
 resource "aws_iam_role" "external-secrets-oidc-role" {
-  name               = "external-secrets-role-with-oidc"
+  name = "external-secrets-role-with-oidc"
   assume_role_policy = data.aws_iam_policy_document.external-secrets-policy_document.json
 }
 
 resource "aws_iam_role_policy_attachment" "external-secrets-secret-manager-role-attach" {
-  count       = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  role       = aws_iam_role.external-secrets-oidc-role.name
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  role = aws_iam_role.external-secrets-oidc-role.name
   policy_arn = aws_iam_policy.external-secrets-secret-manager-serviceaccount-policy.*.arn[0]
 }
 
 resource "aws_iam_role_policy_attachment" "external-secrets-parameter-store-role-attach" {
-  count       = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  role       = aws_iam_role.external-secrets-oidc-role.name
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  role = aws_iam_role.external-secrets-oidc-role.name
   policy_arn = aws_iam_policy.external-secrets-parameter-store-serviceaccount-policy.*.arn[0]
 }
 
@@ -115,7 +87,7 @@ resource "kubernetes_service_account" "external-ingress-ingress-sa" {
   depends_on = [null_resource.get-kube-config]
   count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   metadata {
-    name      = "external-secrets-controller"
+    name = "external-secrets-controller"
     namespace = "kube-system"
     annotations = {
       "eks.amazonaws.com/role-arn" = aws_iam_role.external-secrets-oidc-role.arn
@@ -124,7 +96,7 @@ resource "kubernetes_service_account" "external-ingress-ingress-sa" {
   automount_service_account_token = true
 }
 
-# === Template: external-store.yml.tpl.tpl ===
+# Render external-store.yml with real ARN
 resource "local_file" "external_store_rendered" {
   count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   filename = "${path.module}/extras/external-store.yml"
@@ -133,43 +105,21 @@ resource "local_file" "external_store_rendered" {
   })
 }
 
-# === Install External Secrets + CRDs + ClusterSecretStore ===
+# Install External Secrets
 resource "null_resource" "external-secrets-ingress-chart" {
-  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  triggers = { timestamp = timestamp() }
-
+  triggers = { a = timestamp() }
   depends_on = [
     null_resource.get-kube-config,
     kubernetes_service_account.external-ingress-ingress-sa,
     local_file.external_store_rendered
   ]
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
 
   provisioner "local-exec" {
     command = <<EOF
-# 1. Install CRDs from WORKING RELEASE URL (v0.10.4)
-echo "Installing External Secrets CRDs (v0.10.4)..."
-kubectl apply -f https://github.com/external-secrets/external-secrets/releases/download/v0.10.4/external-secrets-crds.yaml || true
-
-# 2. Wait for CRD (3-minute timeout to prevent hang)
-echo "Waiting for ClusterSecretStore CRD..."
-TIMEOUT=180
-START_TIME=$(date +%s)
-until kubectl get crd clustersecretstores.external-secrets.io > /dev/null 2>&1; do
-  ELAPSED=$(( $(date +%s) - START_TIME ))
-  if [ $ELAPSED -gt $TIMEOUT ]; then
-    echo "ERROR: CRD not ready after 3m - failing build"
-    exit 1
-  fi
-  echo "Still waiting... ($ELAPSED s)"
-  sleep 5
-done
-echo "CRD is ready!"
-
-# 3. Helm repo
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
-# 4. Install Helm chart
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
@@ -178,35 +128,12 @@ helm upgrade -i external-secrets external-secrets/external-secrets \
   --wait \
   --timeout 5m
 
-# 5. Apply ClusterSecretStore
+echo "Waiting 60s for CRDs to register..."
+sleep 60
+
 kubectl apply -f ${path.module}/extras/external-store.yml || true
 
 echo "External Secrets deployed successfully!"
 EOF
   }
-
-  provisioner "local-exec" {
-    when = destroy
-    command = <<EOF
-helm uninstall external-secrets -n kube-system || true
-kubectl delete -f ${path.module}/extras/external-store.yml || true
-EOF
-  }
 }
-
-#resource "null_resource" "external-secrets-ingress-chart" {
-#  triggers = {
-#    a = timestamp()
-#  }
-#  depends_on = [null_resource.get-kube-config]
-#  count      = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-#  provisioner "local-exec" {
-#    command = <<EOF
-#helm repo add external-secrets https://charts.external-secrets.io
-#helm repo update
-#helm upgrade -i external-secrets external-secrets/external-secrets -n kube-system --set serviceAccount.create=false --set serviceAccount.name=external-secrets-controller
-#sleep 30
-#kubectl apply -f ${path.module}/extras/external-store.yml.tpl
-#EOF
-#  }
-#}
