@@ -136,12 +136,7 @@ resource "local_file" "external_store_rendered" {
 # === Install External Secrets + CRDs + ClusterSecretStore ===
 resource "null_resource" "external-secrets-ingress-chart" {
   count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-
-  triggers = {
-    chart     = "external-secrets"
-    role_arn  = aws_iam_role.external-secrets-oidc-role.arn
-    timestamp = timestamp()
-  }
+  triggers = { timestamp = timestamp() }
 
   depends_on = [
     null_resource.get-kube-config,
@@ -151,30 +146,30 @@ resource "null_resource" "external-secrets-ingress-chart" {
 
   provisioner "local-exec" {
     command = <<EOF
-# 1. Install CRDs (idempotent)
+# 1. Install CRDs from CORRECT URL
 echo "Installing External Secrets CRDs..."
-kubectl apply -f https://github.com/external-secrets/external-secrets/releases/download/v0.9.15/external-secrets-crds.yaml || true
+kubectl apply -f https://raw.githubusercontent.com/external-secrets/external-secrets/main/deploy/crds.yaml || true
 
-# 2. Helm repo
+# 2. Wait for CRD to be ready
+echo "Waiting for ClusterSecretStore CRD..."
+until kubectl get crd clustersecretstores.external-secrets.io > /dev/null 2>&1; do
+  echo "Still waiting... (5s)"
+  sleep 5
+done
+echo "CRD is ready!"
+
+# 3. Helm repo
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
-# 3. Install/Upgrade Helm chart with CRDs
+# 4. Install Helm chart (NO --crds)
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
   --set serviceAccount.create=false \
   --set serviceAccount.name=external-secrets-controller \
   --wait \
-  --timeout 5m \
-  --crds
-
-# 4. Wait for CRD
-echo "Waiting for ClusterSecretStore CRD..."
-until kubectl get crd clustersecretstores.external-secrets.io > /dev/null 2>&1; do
-  echo "Still waiting... (5s)"
-  sleep 5
-done
+  --timeout 5m
 
 # 5. Apply ClusterSecretStore
 kubectl apply -f ${path.module}/extras/external-store.yml || true
@@ -184,7 +179,7 @@ EOF
   }
 
   provisioner "local-exec" {
-    when    = destroy
+    when = destroy
     command = <<EOF
 helm uninstall external-secrets -n kube-system || true
 kubectl delete -f ${path.module}/extras/external-store.yml || true
