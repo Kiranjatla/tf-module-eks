@@ -129,10 +129,6 @@ helm upgrade -i external-secrets external-secrets/external-secrets \
   --set serviceAccount.name=external-secrets-controller \
   --set installCRDs=true \
   --version 0.20.4 \
-  --set tolerations[0].key=spot \
-  --set tolerations[0].value=true \
-  --set tolerations[0].effect=NoSchedule \
-  --set tolerations[0].operator=Equal \
   --timeout 5m
 
 echo "Waiting for Deployment..."

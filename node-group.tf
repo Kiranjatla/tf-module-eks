@@ -22,11 +22,11 @@ resource "aws_eks_node_group" "node_group" {
     env  = var.ENV
   }
 
-  taint {
-    key    = "spot"
-    value  = "true"
-    effect = "NO_SCHEDULE"
-  }
+#  taint {
+#    key    = "spot"
+#    value  = "true"
+#    effect = "NO_SCHEDULE"
+#  }
 
   depends_on = [
     aws_iam_role_policy_attachment.node_worker_policy,
