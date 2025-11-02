@@ -151,7 +151,7 @@ timeout=300
 elapsed=0
 interval=5
 
-until kubectl -n kube-system get pods -l app.kubernetes.io/component=webhook -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do
+until kubectl -n kube-system get pods -l app.kubernetes.io/name=external-secrets-webhook -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q True; do
   echo "Webhook pod not ready yet... sleeping $interval s"
   sleep $interval
   elapsed=$((elapsed + interval))
