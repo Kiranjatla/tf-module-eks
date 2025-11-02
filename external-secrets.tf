@@ -121,7 +121,7 @@ resource "null_resource" "external-secrets-ingress-chart" {
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
-echo "Installing External Secrets with SPOT toleration..."
+echo "Installing External Secrets (v0.20.4)..."
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
@@ -137,8 +137,8 @@ until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sl
 echo "Waiting up to 3 min for pod..."
 timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s || {
   echo "Pod failed. Debug:"
-  kubectl -n kube-system get pods -l app.kubernetes.io/name=external-secrets
-  kubectl -n kube-system describe pod -l app.kubernetes.io/name=external-secrets | tail -20
+  kubectl -n kube-multiple get pods -l app.kubernetes.io/name=external-secrets
+  kubectl -n kube-system describe pod -l app.kubernetes.io/name=external-secrets
   exit 1
 }
 
