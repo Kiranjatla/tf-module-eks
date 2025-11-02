@@ -147,6 +147,14 @@ echo "All CRDs are established! Refreshing Kubernetes API..."
 kubectl get --raw=/apis/external-secrets.io/v1 > /dev/null 2>&1 || true
 sleep 5
 
+# Wait for webhook pod to be ready
+echo "Waiting for external-secrets webhook to be ready..."
+until kubectl -n kube-system get pod -l app.kubernetes.io/name=external-secrets -o jsonpath='{.items[?(@.metadata.labels.app\.kubernetes\.io/component=="webhook")].status.phase}' | grep -q Running; do
+  echo "Webhook pod not ready yet... sleeping 5s"
+  sleep 5
+done
+echo "Webhook pod is running!"
+
 echo "Applying ClusterSecretStore..."
 kubectl apply -f ${path.module}/extras/external-store.yml
 
