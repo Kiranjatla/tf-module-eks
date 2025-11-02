@@ -142,17 +142,15 @@ timeout 180 kubectl -n kube-system wait --for=condition=available deploy/externa
   exit 1
 }
 
+echo "Waiting for CRD to be Established..."
+until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
+  echo "CRD not ready yet... sleeping 10s"
+  sleep 10
+done
+
 echo "CRD is Established! Forcing kubectl API refresh..."
 kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
-
-echo "Sleeping 20s to ensure CRDs are registered in the API..."
-sleep 20
-
-echo "Verifying CRD availability..."
-until kubectl api-resources | grep -q "clustersecretstores.external-secrets.io"; do
-  echo "ClusterSecretStore CRD not yet available, waiting 5s..."
-  sleep 5
-done
+sleep 5
 
 echo "Applying ClusterSecretStore..."
 kubectl apply -f ${path.module}/extras/external-store.yml
