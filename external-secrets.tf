@@ -107,33 +107,57 @@ resource "local_file" "external_store_rendered" {
 
 # Install External Secrets
 resource "null_resource" "external-secrets-ingress-chart" {
-  triggers = { a = timestamp() }
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  triggers = { timestamp = timestamp() }
+
   depends_on = [
     null_resource.get-kube-config,
     kubernetes_service_account.external-ingress-ingress-sa,
     local_file.external_store_rendered
   ]
-  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
 
   provisioner "local-exec" {
     command = <<EOF
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
 
+# Install WITHOUT --wait
+echo "Installing External Secrets (no --wait)..."
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
   --set serviceAccount.create=false \
   --set serviceAccount.name=external-secrets-controller \
-  --wait \
   --timeout 5m
 
-echo "Waiting 60s for CRDs to register..."
-sleep 60
+# Wait for Deployment to exist
+echo "Waiting for Deployment..."
+until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
 
+# Wait for pod to be ready (4 min max) - allows IRSA to propagate
+echo "Waiting up to 4 min for pod to be ready..."
+if ! timeout 240 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=240s; then
+  echo "Pod failed. Restarting..."
+  kubectl -n kube-system rollout restart deploy external-secrets
+  timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s || exit 1
+fi
+
+# Wait 30s for CRDs
+echo "Waiting 30s for CRDs..."
+sleep 30
+
+# Apply ClusterSecretStore
 kubectl apply -f ${path.module}/extras/external-store.yml || true
 
 echo "External Secrets deployed successfully!"
+EOF
+  }
+
+  provisioner "local-exec" {
+    when = destroy
+    command = <<EOF
+helm uninstall external-secrets -n kube-system || true
+kubectl delete -f ${path.module}/extras/external-store.yml || true
 EOF
   }
 }
