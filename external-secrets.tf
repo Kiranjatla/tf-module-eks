@@ -107,7 +107,7 @@ resource "local_file" "external_store_rendered" {
 
 # Install External Secrets
 resource "null_resource" "external-secrets-ingress-chart" {
-  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   triggers = { timestamp = timestamp() }
 
   depends_on = [
@@ -130,26 +130,21 @@ helm upgrade -i external-secrets external-secrets/external-secrets \
   --set installCRDs=true \
   --version 0.20.4 \
   --timeout 5m
-
-echo "Waiting for Deployment..."
+echo "Waiting for Deployment to be available..."
 until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
+kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s
 
-echo "Waiting up to 3 min for pod..."
-timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s || {
-  echo "Pod failed. Debug:"
-  kubectl -n kube-multiple get pods -l app.kubernetes.io/name=external-secrets
-  kubectl -n kube-system describe pod -l app.kubernetes.io/name=external-secrets
-  exit 1
-}
-
-echo "Waiting for CRD to be Established..."
-until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
-  echo "CRD not ready yet... sleeping 10s"
-  sleep 10
+# Wait for all required CRDs
+for crd in externalsecrets.external-secrets.io secretstores.external-secrets.io clustersecretstores.external-secrets.io; do
+  echo "Waiting for CRD $crd to be established..."
+  until kubectl get crd $crd -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
+    echo "CRD $crd not ready yet... sleeping 5s"
+    sleep 5
+  done
 done
 
-echo "CRD is Established! Forcing kubectl API refresh..."
-kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
+echo "All CRDs are established! Refreshing Kubernetes API..."
+kubectl get --raw=/apis/external-secrets.io/v1 > /dev/null 2>&1 || true
 sleep 5
 
 echo "Applying ClusterSecretStore..."
@@ -160,10 +155,47 @@ EOF
   }
 
   provisioner "local-exec" {
-    when = destroy
+    when    = destroy
     command = <<EOF
+echo "Uninstalling External Secrets..."
 helm uninstall external-secrets -n kube-system || true
 kubectl delete -f ${path.module}/extras/external-store.yml || true
 EOF
   }
 }
+#echo "Waiting for Deployment..."
+#until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
+#
+#echo "Waiting up to 3 min for pod..."
+#timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s || {
+#  echo "Pod failed. Debug:"
+#  kubectl -n kube-multiple get pods -l app.kubernetes.io/name=external-secrets
+#  kubectl -n kube-system describe pod -l app.kubernetes.io/name=external-secrets
+#  exit 1
+#}
+#
+#echo "Waiting for CRD to be Established..."
+#until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
+#  echo "CRD not ready yet... sleeping 10s"
+#  sleep 10
+#done
+#
+#echo "CRD is Established! Forcing kubectl API refresh..."
+#kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
+#sleep 5
+#
+#echo "Applying ClusterSecretStore..."
+#kubectl apply -f ${path.module}/extras/external-store.yml
+#
+#echo "External Secrets deployed successfully!"
+#EOF
+#  }
+
+#  provisioner "local-exec" {
+#    when = destroy
+#    command = <<EOF
+#helm uninstall external-secrets -n kube-system || true
+#kubectl delete -f ${path.module}/extras/external-store.yml || true
+#EOF
+#  }
+#}
