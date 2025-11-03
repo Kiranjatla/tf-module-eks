@@ -1,4 +1,4 @@
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
   name: roboshop-secret-manager
@@ -15,7 +15,7 @@ spec:
             namespace: kube-system
           inboundJWTExpirationSeconds: 3600
 ---
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
   name: roboshop-parameter-store
