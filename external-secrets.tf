@@ -126,7 +126,7 @@ echo "Installing External Secrets (v0.20.4)..."
 helm upgrade -i external-secrets external-secrets/external-secrets \
   -n kube-system \
   --create-namespace \
-  --set serviceAccount.create=true \
+  --set serviceAccount.create=false \
   --set serviceAccount.name=external-secrets-controller \
   --set installCRDs=true \
   --version 0.20.4 \
