@@ -12,7 +12,8 @@ resource "aws_iam_policy" "external-secrets-secret-manager-serviceaccount-policy
           "secretsmanager:GetResourcePolicy",
           "secretsmanager:GetSecretValue",
           "secretsmanager:DescribeSecret",
-          "secretsmanager:ListSecretVersionIds"
+          "secretsmanager:ListSecretVersionIds",
+          "secretsmanager:ListSecrets"
         ],
         "Resource": "*"
       }
