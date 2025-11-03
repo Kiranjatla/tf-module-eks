@@ -8,7 +8,12 @@ spec:
       service: SecretsManager
       region: us-east-1
       role: ${ROLE_ARN}
-
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-controller
+            namespace: kube-system
+          inboundJWTExpirationSeconds: 3600
 ---
 apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
@@ -20,3 +25,9 @@ spec:
       service: ParameterStore
       region: us-east-1
       role: ${ROLE_ARN}
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-controller
+            namespace: kube-system
+          inboundJWTExpirationSeconds: 3600
