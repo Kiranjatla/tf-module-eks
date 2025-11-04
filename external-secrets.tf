@@ -97,28 +97,28 @@ resource "kubernetes_service_account" "external-ingress-ingress-sa" {
   automount_service_account_token = true
 }
 
-# Render external-store.yml with real ARN
-resource "local_file" "external_store_rendered" {
-  count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  filename = "${path.module}/extras/external-store.yml"
-  content  = templatefile("${path.module}/extras/external-store.yml.tpl", {
-    ROLE_ARN = aws_iam_role.external-secrets-oidc-role.arn
-  })
-}
+## Render external-store.yml with real ARN
+#resource "local_file" "external_store_rendered" {
+#  count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+#  filename = "${path.module}/extras/external-store.yml"
+#  content  = templatefile("${path.module}/extras/external-store.yml.tpl", {
+#    ROLE_ARN = aws_iam_role.external-secrets-oidc-role.arn
+#  })
+#}
 
-# Install External Secrets
-resource "null_resource" "external-secrets-ingress-chart" {
+# Install External Secrets (The Helm chart must still be deployed via shell)
+resource "null_resource" "external-secrets-helm-chart" {
   count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   triggers = { timestamp = timestamp() }
 
+  # IMPORTANT: We still need to run the HELM install via shell, but we remove the kubectl apply for the store.
   depends_on = [
     null_resource.get-kube-config,
     kubernetes_service_account.external-ingress-ingress-sa,
-    local_file.external_store_rendered
   ]
 
   provisioner "local-exec" {
-    command = <<EOF
+    command = <<-EOF
 # Add Helm repo
 helm repo add external-secrets https://charts.external-secrets.io || true
 helm repo update
@@ -133,39 +133,87 @@ helm upgrade -i external-secrets external-secrets/external-secrets \
   --version 0.20.4 \
   --timeout 10m
 
-echo "Waiting for Deployment..."
-until kubectl -n kube-system get deploy external-secrets > /dev/null 2>&1; do sleep 5; done
+echo "Waiting for Deployment and CRDs to be ready..."
+# Wait for the Deployment to be available
+kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=3m
 
-echo "Waiting up to 3 min for pod..."
-timeout 180 kubectl -n kube-system wait --for=condition=available deploy/external-secrets --timeout=180s || {
-  echo "Pod failed. Debug:"
-  kubectl -n kube-system get pods -l app.kubernetes.io/name=external-secrets
-  kubectl -n kube-system describe pod -l app.kubernetes.io/name=external-secrets
-  exit 1
-}
-
-echo "Waiting for CRD to be Established..."
+# Wait for the CRD to be established before Terraform applies the store
 until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
-  echo "CRD not ready yet... sleeping 10s"
-  sleep 10
+  echo "CRD not ready yet... sleeping 5s"
+  sleep 5
 done
 
-echo "CRD is Established! Forcing kubectl API refresh..."
-kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
-sleep 5
-
-echo "Applying ClusterSecretStore..."
-kubectl apply -f ${path.module}/extras/external-store.yml
-
-echo "External Secrets deployed successfully!"
+echo "External Secrets chart deployed and CRDs are established."
 EOF
   }
 
   provisioner "local-exec" {
     when = destroy
-    command = <<EOF
-helm uninstall external-secrets -n kube-system || true
-kubectl delete -f ${path.module}/extras/external-store.yml || true
-EOF
+    command = "helm uninstall external-secrets -n kube-system || true"
+  }
+}
+
+# ===================================================================
+# FIX: Declarative Deployment of ClusterSecretStore
+# ===================================================================
+
+# 1. Deploy the Secrets Manager ClusterSecretStore
+resource "kubernetes_manifest" "roboshop_secret_manager_store" {
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  # Ensure the manifest is created only after the ESO chart (which creates the CRD) is installed
+  depends_on = [null_resource.external-secrets-helm-chart]
+
+  manifest = {
+    apiVersion = "external-secrets.io/v1"
+    kind       = "ClusterSecretStore"
+    metadata = {
+      name = "roboshop-secret-manager"
+    }
+    spec = {
+      provider = {
+        aws = {
+          service = "SecretsManager"
+          region  = "us-east-1"
+          auth = {
+            jwt = {
+              serviceAccountRef = {
+                name      = "external-secrets-controller"
+                namespace = "kube-system"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# 2. Deploy the Parameter Store ClusterSecretStore
+resource "kubernetes_manifest" "roboshop_parameter_store" {
+  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+  depends_on = [null_resource.external-secrets-helm-chart]
+
+  manifest = {
+    apiVersion = "external-secrets.io/v1"
+    kind       = "ClusterSecretStore"
+    metadata = {
+      name = "roboshop-parameter-store"
+    }
+    spec = {
+      provider = {
+        aws = {
+          service = "ParameterStore"
+          region  = "us-east-1"
+          auth = {
+            jwt = {
+              serviceAccountRef = {
+                name      = "external-secrets-controller"
+                namespace = "kube-system"
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
