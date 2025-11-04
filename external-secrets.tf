@@ -155,7 +155,7 @@ kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
 sleep 5
 
 echo "Applying ClusterSecretStore..."
-kubectl apply -f ${path.module}/extras/external-store.yml
+kubectl apply -f external-store.yml
 
 echo "External Secrets deployed successfully!"
 EOF
