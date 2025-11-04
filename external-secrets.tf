@@ -162,6 +162,11 @@ until kubectl --kubeconfig $KUBECONFIG_PATH get endpoints external-secrets-webho
 done
 echo "Webhook endpoint is ready."
 
+# FINAL FIX: Add a short, aggressive sleep to let the Kubernetes API server
+# and all networking components settle before running kubernetes_manifest.
+echo "Waiting 10 seconds for API server service endpoint registration to settle..."
+sleep 10
+
 echo "External Secrets chart deployed and all prerequisites are established."
 EOF
   }
