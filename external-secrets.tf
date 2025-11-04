@@ -1,3 +1,8 @@
+# Assumed data sources must be defined elsewhere (e.g., in main.tf)
+# data "aws_caller_identity" "current" { }
+# resource "aws_eks_cluster" "eks" { ... }
+# resource "null_resource" "get-kube-config" { ... }
+
 # ===================================================================
 # 1. IAM POLICIES (Permissions for ESO to read Secrets/Parameters)
 # ===================================================================
@@ -110,7 +115,7 @@ resource "kubernetes_service_account" "external-secrets-sa" {
 }
 
 # ===================================================================
-# 4. HELM CHART INSTALL (Uses shell due to Helm requirements)
+# 4. HELM CHART INSTALL AND PREREQUISITE WAITS
 # ===================================================================
 
 resource "null_resource" "external-secrets-helm-chart" {
@@ -153,8 +158,7 @@ until kubectl --kubeconfig $KUBECONFIG_PATH get crd clustersecretstores.external
   sleep 5
 done
 
-# 3. CRITICAL NEW WAIT: Wait for the Webhook Service Endpoints to be ready
-# This is the specific fix for the 'no endpoints available' error.
+# 3. CRITICAL WAIT: Wait for the Webhook Service Endpoints to be ready
 echo "Waiting for external-secrets-webhook endpoints to be available..."
 until kubectl --kubeconfig $KUBECONFIG_PATH get endpoints external-secrets-webhook -n kube-system -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null; do
   echo "Webhook endpoint not yet available... sleeping 5s"
@@ -162,8 +166,7 @@ until kubectl --kubeconfig $KUBECONFIG_PATH get endpoints external-secrets-webho
 done
 echo "Webhook endpoint is ready."
 
-# FINAL FIX: Add a short, aggressive sleep to let the Kubernetes API server
-# and all networking components settle before running kubernetes_manifest.
+# FINAL AGGRESSIVE SLEEP: Gives the Kubernetes API server and networking components time to fully settle.
 echo "Waiting 10 seconds for API server service endpoint registration to settle..."
 sleep 10
 
@@ -178,75 +181,69 @@ EOF
 }
 
 # ===================================================================
-# 5. DECLARATIVE CLUSTERSECRETSTORE DEPLOYMENT (The reliable fix)
+# 5. FINAL RELIABLE DEPLOYMENT OF CLUSTERSECRETSTORE (Using Shell)
 # ===================================================================
 
-# 1. Deploy the Secrets Manager ClusterSecretStore
-resource "kubernetes_manifest" "roboshop_secret_manager_store" {
+# This block executes the ClusterSecretStore deployment via kubectl,
+# which has proven to be successful where kubernetes_manifest failed
+# due to a persistent webhook race condition.
+resource "null_resource" "deploy-cluster-secret-stores" {
   count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
 
-  # Dependencies ensure the CRD exists and the Kubernetes provider is authenticated.
+  # MUST run after the Helm chart installation and all its waits are complete.
   depends_on = [
-    null_resource.external-secrets-helm-chart,
-    null_resource.get-kube-config
+    null_resource.external-secrets-helm-chart
   ]
 
-  manifest = {
-    apiVersion = "external-secrets.io/v1"
-    kind       = "ClusterSecretStore"
-    metadata = {
-      name = "roboshop-secret-manager"
-    }
-    spec = {
-      provider = {
-        aws = {
-          service = "SecretsManager"
-          region  = "us-east-1"
-          auth = {
-            jwt = {
-              serviceAccountRef = {
-                name      = "external-secrets-controller"
-                namespace = "kube-system"
-              }
-            }
-          }
-        }
-      }
-    }
+  provisioner "local-exec" {
+    command = <<-EOF
+# Define the kubeconfig path for reliable execution
+KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
+
+echo "Applying ClusterSecretStore manifests using proven kubectl method..."
+cat <<YAML | kubectl --kubeconfig $KUBECONFIG_PATH apply -f -
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: roboshop-secret-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: "us-east-1"
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-controller
+            namespace: kube-system
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: roboshop-parameter-store
+spec:
+  provider:
+    aws:
+      service: ParameterStore
+      region: "us-east-1"
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-controller
+            namespace: kube-system
+YAML
+
+echo "ClusterSecretStores applied successfully."
+EOF
   }
-}
 
-# 2. Deploy the Parameter Store ClusterSecretStore
-resource "kubernetes_manifest" "roboshop_parameter_store" {
-  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-
-  # Dependencies ensure the CRD exists and the Kubernetes provider is authenticated.
-  depends_on = [
-    null_resource.external-secrets-helm-chart,
-    null_resource.get-kube-config
-  ]
-
-  manifest = {
-    apiVersion = "external-secrets.io/v1"
-    kind       = "ClusterSecretStore"
-    metadata = {
-      name = "roboshop-parameter-store"
-    }
-    spec = {
-      provider = {
-        aws = {
-          service = "ParameterStore"
-          region  = "us-east-1"
-          auth = {
-            jwt = {
-              serviceAccountRef = {
-                name      = "external-secrets-controller"
-                namespace = "kube-system"
-              }
-            }
-          }
-        }
-      }
-    }
+  provisioner "local-exec" {
+    when = destroy
+    # Clean up the ClusterSecretStore resources on destroy
+    command = <<-EOF
+KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
+kubectl --kubeconfig $KUBECONFIG_PATH delete clustersecretstore roboshop-secret-manager || true
+kubectl --kubeconfig $KUBECONFIG_PATH delete clustersecretstore roboshop-parameter-store || true
+EOF
   }
 }
