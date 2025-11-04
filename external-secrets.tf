@@ -143,16 +143,26 @@ helm upgrade -i external-secrets external-secrets/external-secrets \
   --timeout 10m
 
 echo "Waiting for Deployment and CRDs to be ready..."
-# Wait for the Deployment to be available
+
+# 1. Wait for the main Deployment to be available
 kubectl --kubeconfig $KUBECONFIG_PATH -n kube-system wait --for=condition=available deploy/external-secrets --timeout=3m
 
-# Wait for the CRD to be established before declarative manifests apply
+# 2. Wait for the CRD to be established
 until kubectl --kubeconfig $KUBECONFIG_PATH get crd clustersecretstores.external-secrets.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' | grep -q True; do
   echo "CRD not ready yet... sleeping 5s"
   sleep 5
 done
 
-echo "External Secrets chart deployed and CRDs are established."
+# 3. CRITICAL NEW WAIT: Wait for the Webhook Service Endpoints to be ready
+# This is the specific fix for the 'no endpoints available' error.
+echo "Waiting for external-secrets-webhook endpoints to be available..."
+until kubectl --kubeconfig $KUBECONFIG_PATH get endpoints external-secrets-webhook -n kube-system -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null; do
+  echo "Webhook endpoint not yet available... sleeping 5s"
+  sleep 5
+done
+echo "Webhook endpoint is ready."
+
+echo "External Secrets chart deployed and all prerequisites are established."
 EOF
   }
 
