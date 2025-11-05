@@ -56,9 +56,3 @@ variable "versionx" {
 variable "AWS_REGION" {
   type = string
 }
-
-variable "ESO_VERSION" {
-  description = "External Secrets Operator Helm chart version"
-  type        = string
-  default     = "0.9.15"  # Latest as of Nov 2025
-}
