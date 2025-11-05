@@ -30,7 +30,7 @@ variable "CREATE_ALB_INGRESS" {
 variable "CREATE_EXTERNAL_SECRETS" {
   description = "Set to true to install External Secrets"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "INSTALL_KUBE_METRICS" {
