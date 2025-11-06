@@ -1,8 +1,3 @@
-# Assumed data sources must be defined elsewhere (e.g., in main.tf)
-# data "aws_caller_identity" "current" { }
-# resource "aws_eks_cluster" "eks" { ... }
-# resource "null_resource" "get-kube-config" { ... }
-
 # ===================================================================
 # 1. IAM POLICIES (Permissions for ESO to read Secrets/Parameters)
 # ===================================================================
