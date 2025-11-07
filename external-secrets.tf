@@ -150,6 +150,14 @@ until kubectl get crd clustersecretstores.external-secrets.io -o jsonpath='{.sta
   sleep 10
 done
 
+# --- NEW WAIT FOR WEBHOOK ENDPOINT ---
+echo "Waiting for Webhook Endpoint to be available..."
+until kubectl get endpoints external-secrets-webhook -n kube-system -o jsonpath='{.subsets}' | grep -q 'addresses'; do
+  echo "Webhook endpoints not ready yet... sleeping 5s"
+  sleep 5
+done
+# -------------------------------------
+
 echo "CRD is Established! Forcing kubectl API refresh..."
 kubectl get --raw=/apis/external-secrets.io/v1alpha1 > /dev/null 2>&1 || true
 sleep 5
