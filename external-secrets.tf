@@ -217,14 +217,3 @@ resource "kubernetes_manifest" "roboshop_parameter_store_store" {
     }
   }
 }
-
-# IMPORTANT: Remove the old null_resource "deploy-cluster-secret-stores"
-  provisioner "local-exec" {
-    when = destroy
-    # Clean up the ClusterSecretStore resources on destroy
-    command = <<-EOF
-      KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
-      kubectl --kubeconfig $KUBECONFIG_PATH delete clustersecretstore roboshop-secret-manager || true
-      kubectl --kubeconfig $KUBECONFIG_PATH delete clustersecretstore roboshop-parameter-store || true
-    EOF
-  }
