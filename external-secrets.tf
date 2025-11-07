@@ -162,47 +162,21 @@ resource "null_resource" "external-secrets-helm-chart" {
 # due to a persistent webhook race condition.
 resource "null_resource" "deploy-cluster-secret-stores" {
   count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
-  # MUST run after the Helm chart installation and all its waits are complete.
   depends_on = [null_resource.external-secrets-helm-chart]
+
   provisioner "local-exec" {
     command = <<-EOF
       # Define the kubeconfig path for reliable execution
       KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
-      echo "Applying ClusterSecretStore manifests using proven kubectl method..."
-      cat <<YAML | kubectl --kubeconfig $KUBECONFIG_PATH apply -f -
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: roboshop-secret-manager
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: "us-east-1"
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets-controller
-            namespace: kube-system
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: roboshop-parameter-store
-spec:
-  provider:
-    aws:
-      service: ParameterStore
-      region: "us-east-1"
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets-controller
-            namespace: kube-system
-YAML
+      MANIFEST_PATH="${path.module}/extras/external-store.yml" # <-- New Path Variable
+
+      echo "Applying ClusterSecretStore manifests from ${MANIFEST_PATH}..."
+      # Use kubectl apply -f with the file path
+      kubectl --kubeconfig $KUBECONFIG_PATH apply -f ${MANIFEST_PATH}
       echo "ClusterSecretStores applied successfully."
     EOF
   }
+
   provisioner "local-exec" {
     when = destroy
     # Clean up the ClusterSecretStore resources on destroy
