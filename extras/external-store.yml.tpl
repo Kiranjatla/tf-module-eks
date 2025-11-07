@@ -13,7 +13,6 @@ spec:
           serviceAccountRef:
             name: external-secrets-controller
             namespace: kube-system
-          inboundJWTExpirationSeconds: 3600
 ---
 apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
@@ -30,4 +29,3 @@ spec:
           serviceAccountRef:
             name: external-secrets-controller
             namespace: kube-system
-          inboundJWTExpirationSeconds: 3600
