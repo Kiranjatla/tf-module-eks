@@ -165,7 +165,7 @@ EOF
     when = destroy
     command = <<EOF
 helm uninstall external-secrets -n kube-system || true
-kubectl delete -f "${path.module}/extras/external-store.yml || true"
+kubectl delete -f "${path.module}/extras/external-store.yml" || true
 EOF
   }
 }
