@@ -157,9 +157,6 @@ resource "null_resource" "external-secrets-helm-chart" {
 # ===================================================================
 # 5. FINAL RELIABLE DEPLOYMENT OF CLUSTERSECRETSTORE (Using Shell)
 # ===================================================================
-# This block executes the ClusterSecretStore deployment via kubectl,
-# which has proven to be successful where kubernetes_manifest failed
-# due to a persistent webhook race condition.
 resource "null_resource" "deploy-cluster-secret-stores" {
   count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   depends_on = [null_resource.external-secrets-helm-chart]
@@ -169,14 +166,41 @@ resource "null_resource" "deploy-cluster-secret-stores" {
       # Define the kubeconfig path for reliable execution
       KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
 
-      # This line is correct: Terraform interpolates ${path.module},
-      # and the shell defines MANIFEST_PATH.
-      MANIFEST_PATH="${path.module}/extras/external-store.yml"
+      echo "Applying ClusterSecretStore manifests using proven kubectl method (Inline YAML)..."
 
-      # FIX: Escape the $ to pass $MANIFEST_PATH to the shell
-      echo "Applying ClusterSecretStore manifests from $${MANIFEST_PATH}..."
-      # FIX: Escape the $ to pass $MANIFEST_PATH to the shell
-      kubectl --kubeconfig $KUBECONFIG_PATH apply -f $${MANIFEST_PATH}
+      # Use the proven 'cat <<EOF | kubectl apply -f -' method, ensuring
+      # KUBECONFIG is respected.
+      cat <<YAML | kubectl --kubeconfig $KUBECONFIG_PATH apply -f -
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: roboshop-secret-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: "us-east-1"
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-controller
+            namespace: kube-system
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: roboshop-parameter-store
+spec:
+  provider:
+    aws:
+      service: ParameterStore
+      region: "us-east-1"
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets-controller
+            namespace: kube-system
+YAML
       echo "ClusterSecretStores applied successfully."
     EOF
   }
