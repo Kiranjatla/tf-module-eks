@@ -168,11 +168,15 @@ resource "null_resource" "deploy-cluster-secret-stores" {
     command = <<-EOF
       # Define the kubeconfig path for reliable execution
       KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
-      MANIFEST_PATH="${path.module}/extras/external-store.yml" # <-- New Path Variable
 
-      echo "Applying ClusterSecretStore manifests from ${MANIFEST_PATH}..."
-      # Use kubectl apply -f with the file path
-      kubectl --kubeconfig $KUBECONFIG_PATH apply -f ${MANIFEST_PATH}
+      # This line is correct: Terraform interpolates ${path.module},
+      # and the shell defines MANIFEST_PATH.
+      MANIFEST_PATH="${path.module}/extras/external-store.yml"
+
+      # FIX: Escape the $ to pass $MANIFEST_PATH to the shell
+      echo "Applying ClusterSecretStore manifests from $${MANIFEST_PATH}..."
+      # FIX: Escape the $ to pass $MANIFEST_PATH to the shell
+      kubectl --kubeconfig $KUBECONFIG_PATH apply -f $${MANIFEST_PATH}
       echo "ClusterSecretStores applied successfully."
     EOF
   }
