@@ -101,7 +101,7 @@ resource "kubernetes_service_account" "external-ingress-ingress-sa" {
 resource "local_file" "external_store_rendered" {
   count    = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
   filename = "${path.module}/extras/external-store.yml"
-  content  = templatefile("${path.module}/extras/external-store.yml", {
+  content  = templatefile("${path.module}/extras/external-store.yml.tpl", {
     ROLE_ARN = aws_iam_role.external-secrets-oidc-role.arn
   })
 }
