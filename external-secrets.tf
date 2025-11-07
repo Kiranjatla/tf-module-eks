@@ -162,14 +162,15 @@ resource "null_resource" "deploy-cluster-secret-stores" {
   depends_on = [null_resource.external-secrets-helm-chart]
 
   provisioner "local-exec" {
+    # Define KUBECONFIG_PATH outside the main command block
+    # Note: Using the absolute path directly in the command argument is safer.
     command = <<-EOF
-      # Define the kubeconfig path for reliable execution
       KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
 
-      echo "Applying ClusterSecretStore manifests using proven kubectl method (Inline YAML)..."
+      echo "Applying ClusterSecretStore manifests using proven kubectl method..."
 
-      # Use the proven 'cat <<EOF | kubectl apply -f -' method, ensuring
-      # KUBECONFIG is respected.
+      # Use cat for the YAML content and pipe it to kubectl.
+      # We explicitly use the shell variable $KUBECONFIG_PATH here.
       cat <<YAML | kubectl --kubeconfig $KUBECONFIG_PATH apply -f -
 apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
