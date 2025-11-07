@@ -157,55 +157,68 @@ resource "null_resource" "external-secrets-helm-chart" {
 # ===================================================================
 # 5. FINAL RELIABLE DEPLOYMENT OF CLUSTERSECRETSTORE (Using Shell)
 # ===================================================================
-resource "null_resource" "deploy-cluster-secret-stores" {
-  count = var.CREATE_EXTERNAL_SECRETS ? 1 : 0
+# Add this block to replace your null_resource.deploy-cluster-secret-stores
+resource "kubernetes_manifest" "roboshop_secret_manager_store" {
+  provider = kubernetes
+  # Must run after the Helm chart installation and all its waits are complete.
+  # This makes the kubernetes provider wait until the dependencies are satisfied.
   depends_on = [null_resource.external-secrets-helm-chart]
 
-  provisioner "local-exec" {
-    # Define KUBECONFIG_PATH outside the main command block
-    # Note: Using the absolute path directly in the command argument is safer.
-    command = <<-EOF
-      KUBECONFIG_PATH="${pathexpand("~/.kube/config")}"
-
-      echo "Applying ClusterSecretStore manifests using proven kubectl method..."
-
-      # Use cat for the YAML content and pipe it to kubectl.
-      # We explicitly use the shell variable $KUBECONFIG_PATH here.
-      cat <<YAML | kubectl --kubeconfig $KUBECONFIG_PATH apply -f -
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: roboshop-secret-manager
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: "us-east-1"
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets-controller
-            namespace: kube-system
----
-apiVersion: external-secrets.io/v1
-kind: ClusterSecretStore
-metadata:
-  name: roboshop-parameter-store
-spec:
-  provider:
-    aws:
-      service: ParameterStore
-      region: "us-east-1"
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets-controller
-            namespace: kube-system
-YAML
-      echo "ClusterSecretStores applied successfully."
-    EOF
+  manifest = {
+    "apiVersion" = "external-secrets.io/v1"
+    "kind"       = "ClusterSecretStore"
+    "metadata" = {
+      "name" = "roboshop-secret-manager"
+    }
+    "spec" = {
+      "provider" = {
+        "aws" = {
+          "service" = "SecretsManager"
+          "region"  = "us-east-1"
+          "auth" = {
+            "jwt" = {
+              "serviceAccountRef" = {
+                "name"      = "external-secrets-controller"
+                "namespace" = "kube-system"
+              }
+            }
+          }
+        }
+      }
+    }
   }
+}
 
+resource "kubernetes_manifest" "roboshop_parameter_store_store" {
+  provider = kubernetes
+  depends_on = [null_resource.external-secrets-helm-chart]
+
+  manifest = {
+    "apiVersion" = "external-secrets.io/v1"
+    "kind"       = "ClusterSecretStore"
+    "metadata" = {
+      "name" = "roboshop-parameter-store"
+    }
+    "spec" = {
+      "provider" = {
+        "aws" = {
+          "service" = "ParameterStore"
+          "region"  = "us-east-1"
+          "auth" = {
+            "jwt" = {
+              "serviceAccountRef" = {
+                "name"      = "external-secrets-controller"
+                "namespace" = "kube-system"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# IMPORTANT: Remove the old null_resource "deploy-cluster-secret-stores"
   provisioner "local-exec" {
     when = destroy
     # Clean up the ClusterSecretStore resources on destroy
@@ -215,4 +228,3 @@ YAML
       kubectl --kubeconfig $KUBECONFIG_PATH delete clustersecretstore roboshop-parameter-store || true
     EOF
   }
-}
