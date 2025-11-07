@@ -47,6 +47,16 @@ resource "aws_iam_policy" "external-secrets-parameter-store-serviceaccount-polic
 data "aws_iam_policy_document" "external-secrets-policy_document" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type = "Federated"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(
+        aws_eks_cluster.eks.identity[0].oidc[0].issuer,
+        "https://",
+        "",
+      )}"]
+    }
+
     condition {
       test = "StringEquals"
       variable = "${replace(
@@ -56,13 +66,16 @@ data "aws_iam_policy_document" "external-secrets-policy_document" {
       )}:aud"
       values = ["sts.amazonaws.com"]
     }
-    principals {
-      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/${replace(
+
+    // 🚀 NEW CONDITION ADDED HERE: Restrict to the Service Account
+    condition {
+      test = "StringEquals"
+      variable = "${replace(
         aws_eks_cluster.eks.identity[0].oidc[0].issuer,
         "https://",
         "",
-      )}"]
-      type = "Federated"
+      )}:sub"
+      values = ["system:serviceaccount:kube-system:external-secrets-controller"]
     }
   }
 }
